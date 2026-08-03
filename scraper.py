@@ -83,10 +83,17 @@ def cerca_su_google(page, query, num_risultati, salva_debug=False):
     page.wait_for_timeout(1500)
 
     if salva_debug:
-        os.makedirs("debug", exist_ok=True)
-        page.screenshot(path="debug/screenshot_google.png", full_page=True)
-        with open("debug/pagina_google.html", "w", encoding="utf-8") as f:
-            f.write(page.content())
+        print("=" * 60)
+        print("DEBUG - Titolo della pagina vista da Playwright:")
+        print(page.title())
+        print("-" * 60)
+        print("DEBUG - Primi 1000 caratteri del testo visibile nella pagina:")
+        try:
+            testo_visibile = page.inner_text("body")
+        except Exception:
+            testo_visibile = "(impossibile leggere il testo del body)"
+        print(testo_visibile[:1000])
+        print("=" * 60)
 
     risultati = []
     blocchi = page.query_selector_all("div.g, div[data-sokoban-container]")
