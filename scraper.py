@@ -76,11 +76,17 @@ def accetta_cookie_se_presente(page):
             continue
 
 
-def cerca_su_google(page, query, num_risultati):
+def cerca_su_google(page, query, num_risultati, salva_debug=False):
     url = f"https://www.google.com/search?q={query.replace(' ', '+')}&num={num_risultati}&hl=en"
     page.goto(url, timeout=30000)
     accetta_cookie_se_presente(page)
     page.wait_for_timeout(1500)
+
+    if salva_debug:
+        os.makedirs("debug", exist_ok=True)
+        page.screenshot(path="debug/screenshot_google.png", full_page=True)
+        with open("debug/pagina_google.html", "w", encoding="utf-8") as f:
+            f.write(page.content())
 
     risultati = []
     blocchi = page.query_selector_all("div.g, div[data-sokoban-container]")
@@ -185,9 +191,11 @@ def main():
         )
         page = context.new_page()
 
-        for query in QUERIES:
+        for indice, query in enumerate(QUERIES):
             try:
-                risultati = cerca_su_google(page, query, RISULTATI_PER_QUERY)
+                risultati = cerca_su_google(
+                    page, query, RISULTATI_PER_QUERY, salva_debug=(indice == 0)
+                )
                 for r in risultati:
                     totale_risultati += scrivi_o_aggiorna_riga(
                         foglio_risultati, mappa_url, timestamp, query, r
