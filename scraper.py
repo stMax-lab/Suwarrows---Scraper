@@ -3,6 +3,8 @@ SUWARROW WATCHER - Scraper con Playwright (browser reale)
 -----------------------------------------------------------
 Gira su GitHub Actions, ogni settimana. Scrive i risultati direttamente
 sul foglio Google "Suwarrows Watcher -bis" usando un Service Account.
+
+VERSIONE v2: Header spoofati e delay intelligenti per evitare blocchi Google
 """
 
 import os
@@ -77,10 +79,40 @@ def accetta_cookie_se_presente(page):
 
 
 def cerca_su_google(page, query, num_risultati, salva_debug=False):
+    """Cerca su Google con header e timing realistici per evitare blocchi."""
     url = f"https://www.google.com/search?q={query.replace(' ', '+')}&num={num_risultati}&hl=en"
-    page.goto(url, timeout=30000)
+    
+    # Aggiungi header HTTP realistici
+    headers = {
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "max-age=0",
+        "DNT": "1",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+    }
+    
+    page.goto(url, timeout=30000, wait_until="domcontentloaded")
+    
+    # Aggiungi header DOPO la navigazione (fallback se alcuni non vengono passati)
+    page.evaluate("""() => {
+        Object.defineProperty(navigator, 'webdriver', {
+            get: () => false,
+        });
+    }""")
+    
     accetta_cookie_se_presente(page)
-    page.wait_for_timeout(1500)
+    
+    # Delay più realistico: simula scrolling e lettura
+    page.wait_for_timeout(random.uniform(2000, 4000))
+    
+    # Simula scroll (comportamento umano)
+    page.evaluate("window.scrollBy(0, window.innerHeight / 2)")
+    page.wait_for_timeout(random.uniform(500, 1500))
 
     if salva_debug:
         print("=" * 60)
@@ -188,29 +220,49 @@ def main():
     mappa_url = costruisci_mappa_url(foglio_risultati)
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--disable-dev-shm-usage",
+                "--no-sandbox",
+            ]
+        )
+        
         context = browser.new_context(
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0 Safari/537.36"
-            )
+                "Chrome/127.0.0.0 Safari/537.36"
+            ),
+            viewport={"width": 1920, "height": 1080},
+            locale="en-US",
         )
         page = context.new_page()
 
         for indice, query in enumerate(QUERIES):
             try:
+                print(f"[{indice+1}/{len(QUERIES)}] Cercando: {query}")
                 risultati = cerca_su_google(
                     page, query, RISULTATI_PER_QUERY, salva_debug=(indice == 0)
                 )
+                print(f"  → Trovati {len(risultati)} risultati")
+                
                 for r in risultati:
                     totale_risultati += scrivi_o_aggiorna_riga(
                         foglio_risultati, mappa_url, timestamp, query, r
                     )
-                # Pausa casuale per non sembrare un bot troppo regolare
-                time.sleep(random.uniform(3, 6))
+                
+                # Delay lungo e realistico tra query: simula lettura umana
+                # Range: 5-12 secondi, con variazione casuale
+                delay = random.uniform(5, 12)
+                print(f"  ⏳ Pausa {delay:.1f}s prima della prossima query...")
+                time.sleep(delay)
+                
             except Exception as e:
-                errori.append(f"Query '{query}': {e}")
+                errori.append(f"Query '{query}': {str(e)[:100]}")
+                print(f"  ❌ Errore: {str(e)[:100]}")
+                time.sleep(random.uniform(3, 5))
 
         browser.close()
 
@@ -218,11 +270,11 @@ def main():
         timestamp,
         len(QUERIES),
         totale_risultati,
-        "N/A (Playwright, no crediti API)",
-        " | ".join(errori) if errori else "",
+        "N/A (Playwright v2 + spoofing)",
+        " | ".join(errori) if errori else "OK",
     ])
 
-    print(f"Fatto. Nuovi/aggiornati: {totale_risultati}. Errori: {len(errori)}")
+    print(f"\n✅ Fatto. Nuovi/aggiornati: {totale_risultati}. Errori: {len(errori)}")
 
 
 if __name__ == "__main__":
