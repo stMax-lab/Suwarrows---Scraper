@@ -1,0 +1,30 @@
+name: Suwarrow Weekly Scrape
+
+on:
+  schedule:
+    # Ogni lunedì alle 7:00 CEST (le 5:00 o 6:00 UTC a seconda dell'ora legale)
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}  # permette anche l'avvio manuale dal sito GitHub
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repository
+        uses: actions/checkout@v4
+
+      - name: Imposta Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installa le dipendenze Python
+        run: pip install -r requirements.txt
+
+      - name: Installa i browser di Playwright
+        run: playwright install --with-deps chromium
+
+      - name: Esegui lo scraper
+        env:
+          GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
+        run: python scraper.py
